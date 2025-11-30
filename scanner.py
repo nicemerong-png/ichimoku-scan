@@ -1,64 +1,46 @@
-import ccxt
-import pandas as pd
-import numpy as np
+import requests
 import json
-from datetime import datetime
+import pandas as pd
 
-exchange = ccxt.bybit()
+symbols = ["btc", "eth", "sol", "xrp", "ada", "doge"]
 
-def ichimoku(df):
-    high = df['high']
-    low = df['low']
+scan_results = []
 
-    conv = (high.rolling(9).max() + low.rolling(9).min()) / 2
-    base = (high.rolling(26).max() + low.rolling(26).min()) / 2
-    spanA = (conv + base) / 2
-    spanB = (high.rolling(52).max() + low.rolling(52).min()) / 2
+def fetch_weekly_ohlc(symbol):
+    url = f"https://charts-prod-us.volume-api.pro/coins/{symbol}/candles?interval=1w"
+    r = requests.get(url)
+    data = r.json()
 
-    return spanA, spanB
+    # 데이터 없음 방지
+    if "candles" not in data:
+        return None
 
-def fetch_symbols():
-    markets = exchange.load_markets()
-    return [s for s in markets if s.endswith("/USDT")]
+    df = pd.DataFrame(data["candles"])
+    df.columns = ["timestamp", "open", "high", "low", "close", "volume"]
 
-def fetch_weekly(symbol):
-    data = exchange.fetch_ohlcv(symbol, timeframe="1w", limit=120)
-    df = pd.DataFrame(data, columns=['time','open','high','low','close','volume'])
     return df
 
-def passes(df):
-    spanA, spanB = ichimoku(df)
-    if len(df) < 60:
+def is_ichimoku_bullish(df):
+    if len(df) < 52:
         return False
 
-    A = spanA.iloc[-1]
-    B = spanB.iloc[-1]
-    close = df['close'].iloc[-1]
-    open_ = df['open'].iloc[-1]
+    # Ichimoku
+    df["tenkan"] = (df["high"].rolling(9).max() + df["low"].rolling(9).min()) / 2
+    df["kijun"] = (df["high"].rolling(26).max() + df["low"].rolling(26).min()) / 2
 
-    return (A > B) and (close > A) and (close > open_)
+    df["senkou1"] = ((df["tenkan"] + df["kijun"]) / 2).shift(26)
+    df["senkou2"] = ((df["high"].rolling(52).max() + df["low"].rolling(52).min()) / 2).shift(26)
 
-def run():
-    symbols = fetch_symbols()
-    good = []
+    last = df.iloc[-1]
 
-    for sym in symbols:
-        try:
-            df = fetch_weekly(sym)
-            if passes(df):
-                good.append(sym)
-        except:
-            continue
+    return last["senkou1"] > last["senkou2"] and last["close"] > last["senkou1"]
 
-    output = {
-        "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "total": len(good),
-        "symbols": good
-    }
+for s in symbols:
+    df = fetch_weekly_ohlc(s)
+    if df is not None and is_ichimoku_bullish(df):
+        scan_results.append(s.upper())
 
-    with open("scan_results.json", "w") as f:
-        json.dump(output, f, indent=4)
+with open("scan_results.json", "w") as f:
+    json.dump(scan_results, f, indent=4)
 
-if __name__ == "__main__":
-    run()
-
+print("Scan complete:", scan_results)
