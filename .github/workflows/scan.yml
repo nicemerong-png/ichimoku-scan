@@ -1,0 +1,34 @@
+name: Auto Ichimoku Scan
+
+on:
+  schedule:
+    - cron: "0 0 * * *"   # 매일 한국시간 09:00 자동 실행
+  workflow_dispatch: {}    # 수동 실행 버튼도 생성됨
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install ccxt pandas numpy
+
+      - name: Run scanner
+        run: python scanner.py
+
+      - name: Commit updated results
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          git add scan_results.json
+          git commit -m "Auto update" || echo "No changes"
+          git push
