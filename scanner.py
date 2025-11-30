@@ -4,7 +4,7 @@ import numpy as np
 import json
 from datetime import datetime
 
-exchange = ccxt.binance()
+exchange = ccxt.bybit()
 
 def ichimoku(df):
     high = df['high']
@@ -61,3 +61,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+
