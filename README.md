@@ -1,0 +1,2 @@
+# ichimoku-scan
+ichimoku-scan
